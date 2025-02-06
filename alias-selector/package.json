@@ -1,0 +1,14 @@
+{
+  "name": "alias-selector",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Nam Truong",
+  "license": "ISC",
+  "devDependencies": {
+    "inquirer": "^12.4.1"
+  }
+}
