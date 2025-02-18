@@ -50,11 +50,25 @@ async function selectAndRunAlias() {
 
   console.log(`Running: ${selectedAlias}`);
 
-  const shell = spawn(selectedAlias, { stdio: "inherit", shell: true });
+  if (selectedAlias.startsWith("cd ")) {
+    // Get target directory from the alias
+    let targetDir = selectedAlias.split("cd ")[1].trim();
+    // Replace ~ with the home directory
+    targetDir = targetDir.replace(/^~(\/|$)/, `${process.env.HOME}$1`);
 
-  shell.on("exit", (code) => {
-    // console.log(`Process exited with code ${code}`);
-  });
+    try {
+      spawn('zsh', ['-i'], { stdio: 'inherit', cwd: targetDir });
+      console.log(`Changed directory to: ${process.cwd()}`);
+    } catch (err) {
+      console.error(`Failed to change directory: ${err.message}`);
+    }
+  } else {
+    const shell = spawn(selectedAlias, { stdio: "inherit", shell: true });
+
+    shell.on("exit", (code) => {
+      // console.log(`Process exited with code ${code}`);
+    });
+  }
 }
 
 selectAndRunAlias();
