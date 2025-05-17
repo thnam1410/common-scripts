@@ -63,7 +63,8 @@ async function selectAndRunAlias() {
       console.error(`Failed to change directory: ${err.message}`);
     }
   } else {
-    const shell = spawn(selectedAlias, { stdio: "inherit", shell: true });
+    // const shell = spawn(selectedAlias, { stdio: "inherit", shell: true });
+    const shell = spawn('zsh', ['-i', '-c', selectedAlias], { stdio: 'inherit' });
 
     shell.on("exit", (code) => {
       // console.log(`Process exited with code ${code}`);
