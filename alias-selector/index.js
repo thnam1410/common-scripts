@@ -34,19 +34,30 @@ async function selectAndRunAlias() {
 
   const excludeList = ["tf", "k", "aaa"];
 
-  const { selectedAlias } = await inquirer.prompt([
-    {
-      type: "list",
-      name: "selectedAlias",
-      message: "Select an alias to execute:",
-      choices: aliases
-        .filter((x) => !excludeList.includes(x.name))
-        .map((a) => ({
-          name: `${a.name} → ${a.command}`,
-          value: a.command,
-        })),
-    },
-  ]);
+  let selectedAlias;
+  try {
+    const result = await inquirer.prompt([
+      {
+        type: "list",
+        name: "selectedAlias",
+        message: "Select an alias to execute:",
+        choices: aliases
+          .filter((x) => !excludeList.includes(x.name))
+          .map((a) => ({
+            name: `${a.name} → ${a.command}`,
+            value: a.command,
+          })),
+      },
+    ]);
+    selectedAlias = result.selectedAlias;
+  } catch (error) {
+    // Handle user interruption (Ctrl+C)
+    if (error.name === 'ExitPromptError') {
+      console.log('\nCancelled!');
+      process.exit(0);
+    }
+    throw error;
+  }
 
   console.log(`Running: ${selectedAlias}`);
 
@@ -66,8 +77,10 @@ async function selectAndRunAlias() {
     // const shell = spawn(selectedAlias, { stdio: "inherit", shell: true });
     const shell = spawn('zsh', ['-i', '-c', selectedAlias], { stdio: 'inherit' });
 
-    shell.on("exit", (code) => {
-      // console.log(`Process exited with code ${code}`);
+    shell.on("exit", (code, signal) => {
+      if (signal === 'SIGINT' || code === 130) {
+        console.log('\nCancelled!');
+      }
     });
   }
 }
