@@ -8,7 +8,7 @@
   },
   "author": "Nam Truong",
   "license": "ISC",
-  "devDependencies": {
+  "dependencies": {
     "inquirer": "^12.4.1"
   }
 }

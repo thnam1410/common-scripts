@@ -18,6 +18,12 @@ interface PurgeStats {
   startTime: number;
 }
 
+interface PurgeOptions {
+  tableName: string;
+  parallelSegments: number;
+  dryRun: boolean;
+}
+
 async function getTableKeys(
   client: DynamoDBClient,
   tableName: string
@@ -125,9 +131,9 @@ async function scanSegment(
 
 async function purgeTable(
   client: DynamoDBClient,
-  tableName: string,
-  parallelSegments: number = 4
+  options: PurgeOptions
 ): Promise<void> {
+  const { tableName, parallelSegments, dryRun } = options;
   console.log(`\n🔍 Analyzing table structure...`);
   const keys = await getTableKeys(client, tableName);
   console.log(
@@ -135,6 +141,13 @@ async function purgeTable(
       .map((k) => `${k.attributeName} (${k.keyType})`)
       .join(", ")}`
   );
+
+  if (dryRun) {
+    console.log(
+      "\n📝 Dry run enabled — no data will be deleted. Use this output to confirm settings."
+    );
+    return;
+  }
 
   const stats: PurgeStats = {
     scanned: 0,
@@ -220,11 +233,32 @@ async function main() {
         max: 10,
       },
       {
+        type: "toggle",
+        name: "dryRun",
+        message: "Dry run (inspect only, no deletes)?",
+        initial: false,
+        active: "yes",
+        inactive: "no",
+      },
+      {
+        type: "text",
+        name: "confirmName",
+        message: (prev, values) =>
+          `Type the table name (${values.tableName}) to confirm full purge:`,
+        validate: (value: string, values: any) =>
+          value === values.tableName
+            ? true
+            : "Must match the table name exactly",
+        format: (value: string) => value.trim(),
+        skip: (prev, values) => values.dryRun,
+      },
+      {
         type: "confirm",
         name: "confirm",
         message: (prev: any, values: any) =>
           `⚠️  Are you sure you want to purge ALL data from table "${values.tableName}" using profile "${values.awsProfile}"?`,
         initial: false,
+        skip: (prev, values) => values.dryRun,
       },
     ],
     {
@@ -235,7 +269,7 @@ async function main() {
     }
   );
 
-  if (!responses.confirm) {
+  if (!responses.dryRun && !responses.confirm) {
     console.log("\n❌ Purge cancelled. No data was deleted.");
     return;
   }
@@ -247,7 +281,11 @@ async function main() {
       region: responses.region,
     });
 
-    await purgeTable(client, responses.tableName, responses.parallelSegments);
+    await purgeTable(client, {
+      tableName: responses.tableName,
+      parallelSegments: responses.parallelSegments,
+      dryRun: responses.dryRun,
+    });
   } catch (error: any) {
     console.error("\n❌ Error:", error.message);
     if (error.name === "ResourceNotFoundException") {
