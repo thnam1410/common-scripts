@@ -2,13 +2,20 @@
   "name": "alias-selector",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "npm run build && node dist/index.js",
+    "build": "tsc",
+    "dev": "ts-node index.ts"
   },
   "author": "Nam Truong",
   "license": "ISC",
   "dependencies": {
     "inquirer": "^12.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.2"
   }
 }

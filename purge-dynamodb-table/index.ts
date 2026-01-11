@@ -7,6 +7,13 @@ import {
 } from "@aws-sdk/client-dynamodb";
 import prompts from "prompts";
 
+// Configuration constants
+const SCAN_LIMIT = 100;
+const MAX_RETRIES = 5;
+const BATCH_SIZE = 25; // DynamoDB BatchWriteItem limit
+const BACKOFF_BASE_MS = 100;
+const PROGRESS_INTERVAL_MS = 2000;
+
 interface TableKey {
   attributeName: string;
   keyType: "HASH" | "RANGE";
@@ -59,7 +66,7 @@ async function scanSegment(
       TotalSegments: totalSegments,
       ProjectionExpression: keyAttributes.join(", "),
       ExclusiveStartKey: lastEvaluatedKey,
-      Limit: 100,
+      Limit: SCAN_LIMIT,
     });
 
     const scanResponse = await client.send(scanCommand);
@@ -67,8 +74,8 @@ async function scanSegment(
 
     if (scanResponse.Items && scanResponse.Items.length > 0) {
       // Delete in batches of 25 (DynamoDB limit)
-      for (let i = 0; i < scanResponse.Items.length; i += 25) {
-        const batch = scanResponse.Items.slice(i, i + 25);
+      for (let i = 0; i < scanResponse.Items.length; i += BATCH_SIZE) {
+        const batch = scanResponse.Items.slice(i, i + BATCH_SIZE);
 
         const deleteRequests = batch.map((item) => ({
           DeleteRequest: {
@@ -79,14 +86,13 @@ async function scanSegment(
         }));
 
         let retries = 0;
-        const maxRetries = 5;
         let unprocessedItems: Record<string, WriteRequest[]> = {
           [tableName]: deleteRequests,
         };
 
         while (
           Object.keys(unprocessedItems).length > 0 &&
-          retries < maxRetries
+          retries < MAX_RETRIES
         ) {
           try {
             const batchCommand = new BatchWriteItemCommand({
@@ -106,7 +112,7 @@ async function scanSegment(
               retries++;
               // Exponential backoff
               await new Promise((resolve) =>
-                setTimeout(resolve, Math.pow(2, retries) * 100)
+                setTimeout(resolve, Math.pow(2, retries) * BACKOFF_BASE_MS)
               );
             } else {
               unprocessedItems = {};
@@ -115,7 +121,7 @@ async function scanSegment(
             if (error.name === "ProvisionedThroughputExceededException") {
               retries++;
               await new Promise((resolve) =>
-                setTimeout(resolve, Math.pow(2, retries) * 100)
+                setTimeout(resolve, Math.pow(2, retries) * BACKOFF_BASE_MS)
               );
             } else {
               throw error;
@@ -161,14 +167,19 @@ async function purgeTable(
 
   // Progress reporting interval
   const progressInterval = setInterval(() => {
+    if (stats.scanned === 0) {
+      // Don't log progress until we've actually scanned something
+      return;
+    }
     const elapsed = ((Date.now() - stats.startTime) / 1000).toFixed(1);
-    const rate = (stats.deleted / (Date.now() - stats.startTime)) * 1000;
+    const elapsedMs = Date.now() - stats.startTime;
+    const rate = elapsedMs > 0 ? (stats.deleted / elapsedMs) * 1000 : 0;
     console.log(
       `📊 Scanned: ${stats.scanned} | Deleted: ${
         stats.deleted
       } | Rate: ${rate.toFixed(0)} items/sec | Time: ${elapsed}s`
     );
-  }, 2000);
+  }, PROGRESS_INTERVAL_MS);
 
   try {
     // Run parallel scans
