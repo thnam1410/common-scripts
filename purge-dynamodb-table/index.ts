@@ -6,8 +6,32 @@ import {
   WriteRequest,
 } from "@aws-sdk/client-dynamodb";
 import prompts from "prompts";
+import fs from "fs";
+import path from "path";
 
 // Configuration constants
+const CACHE_FILE = path.join(__dirname, ".last-choices.json");
+
+type CachedChoices = {
+  awsProfile?: string;
+  region?: string;
+  tableName?: string;
+  parallelSegments?: number;
+  dryRun?: boolean;
+};
+
+function loadLastChoices(): CachedChoices {
+  try {
+    const data = fs.readFileSync(CACHE_FILE, "utf-8");
+    return JSON.parse(data);
+  } catch {
+    return {};
+  }
+}
+
+function saveLastChoices(choices: CachedChoices) {
+  fs.writeFileSync(CACHE_FILE, JSON.stringify(choices, null, 2), "utf-8");
+}
 const SCAN_LIMIT = 100;
 const MAX_RETRIES = 5;
 const BATCH_SIZE = 25; // DynamoDB BatchWriteItem limit
@@ -210,13 +234,15 @@ async function purgeTable(
 async function main() {
   console.log("🗑️  DynamoDB Table Purge Tool\n");
 
+  const lastChoices = loadLastChoices();
+
   const responses = await prompts(
     [
       {
         type: "text",
         name: "awsProfile",
         message: "Enter AWS Profile:",
-        initial: "default",
+        initial: lastChoices.awsProfile || "default",
         validate: (value: string) =>
           value.length > 0 ? true : "AWS Profile is required",
       },
@@ -224,7 +250,7 @@ async function main() {
         type: "text",
         name: "region",
         message: "Enter AWS Region:",
-        initial: "ap-southeast-2",
+        initial: lastChoices.region || "ap-southeast-2",
         validate: (value: string) =>
           value.length > 0 ? true : "AWS Region is required",
       },
@@ -232,6 +258,7 @@ async function main() {
         type: "text",
         name: "tableName",
         message: "Enter DynamoDB Table Name:",
+        initial: lastChoices.tableName,
         validate: (value: string) =>
           value.length > 0 ? true : "Table name is required",
       },
@@ -239,7 +266,10 @@ async function main() {
         type: "number",
         name: "parallelSegments",
         message: "Number of parallel segments (1-10):",
-        initial: 4,
+        initial:
+          typeof lastChoices.parallelSegments === "number"
+            ? lastChoices.parallelSegments
+            : parseInt(process.env.PARALLEL_SEGMENTS || "5"),
         min: 1,
         max: 10,
       },
@@ -247,29 +277,17 @@ async function main() {
         type: "toggle",
         name: "dryRun",
         message: "Dry run (inspect only, no deletes)?",
-        initial: false,
+        initial:
+          typeof lastChoices.dryRun === "boolean" ? lastChoices.dryRun : false,
         active: "yes",
         inactive: "no",
       },
       {
-        type: "text",
-        name: "confirmName",
-        message: (prev, values) =>
-          `Type the table name (${values.tableName}) to confirm full purge:`,
-        validate: (value: string, values: any) =>
-          value === values.tableName
-            ? true
-            : "Must match the table name exactly",
-        format: (value: string) => value.trim(),
-        skip: (prev, values) => values.dryRun,
-      },
-      {
-        type: "confirm",
         name: "confirm",
         message: (prev: any, values: any) =>
           `⚠️  Are you sure you want to purge ALL data from table "${values.tableName}" using profile "${values.awsProfile}"?`,
         initial: false,
-        skip: (prev, values) => values.dryRun,
+        type: (prev, values): any => (values.dryRun ? null : "confirm"),
       },
     ],
     {
@@ -293,6 +311,15 @@ async function main() {
     });
 
     await purgeTable(client, {
+      tableName: responses.tableName,
+      parallelSegments: responses.parallelSegments,
+      dryRun: responses.dryRun,
+    });
+
+    // Save all choices for next run
+    saveLastChoices({
+      awsProfile: responses.awsProfile,
+      region: responses.region,
       tableName: responses.tableName,
       parallelSegments: responses.parallelSegments,
       dryRun: responses.dryRun,
