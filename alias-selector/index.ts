@@ -85,21 +85,29 @@ async function selectAndRunAlias(): Promise<void> {
 
   console.log(`Running: ${selectedAlias}`);
 
-  if (selectedAlias.startsWith("cd ")) {
-    // Get target directory from the alias
-    let targetDir = selectedAlias.split("cd ")[1].trim();
+  const ZSH = "/bin/zsh";
+
+  // Only treat as a simple cd if the command is purely "cd <dir>" with no shell operators
+  const simpleCdMatch = /^cd\s+([^&|;]+)$/.exec(selectedAlias);
+  if (simpleCdMatch) {
+    let targetDir = simpleCdMatch[1].trim();
     // Replace ~ with the home directory
     targetDir = targetDir.replace(/^~(\/|$)/, `${process.env.HOME}$1`);
 
     try {
-      spawn("zsh", ["-i"], { stdio: "inherit", cwd: targetDir });
+      const shell = spawn(ZSH, ["-i"], { stdio: "inherit", cwd: targetDir });
       console.log(`Opened shell in: ${targetDir}`);
+      shell.on("exit", (code, signal) => {
+        if (signal === "SIGINT" || code === 130) {
+          console.log("\nCancelled!");
+        }
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`Failed to change directory: ${errorMessage}`);
     }
   } else {
-    const shell = spawn("zsh", ["-i", "-c", selectedAlias], {
+    const shell = spawn(ZSH, ["-i", "-c", selectedAlias], {
       stdio: "inherit",
     });
 
