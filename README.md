@@ -10,9 +10,21 @@ A grab bag of little utilities I use regularly. Each tool lives in its own folde
 - See `alias-selector/README.md` for installation, configuration, and usage tips
 
 ### purge-dynamodb-table
-- TypeScript CLI that deletes **every** item in a DynamoDB table in parallel
+- CLI that deletes **every** item in a DynamoDB table in parallel
 - Provides progress reporting, retry logic, and guard rails to avoid accidents
 - See `purge-dynamodb-table/README.md` for installation, configuration, and safety notes
+
+### empty-multiple-s3-buckets
+- CLI to empty multiple S3 buckets across different regions in one run
+- Reads bucket configuration from `buckets.json` (gitignored for security)
+- Auto-detects versioning; optionally deletes delete markers
+- Batch deletion with exponential backoff, progress logging, and dry-run support
+- See `empty-multiple-s3-buckets/README.md` for installation and usage
+
+### vercel-project-manager
+- Interactive CLI to manage Vercel projects
+- Pause, resume, or configure multiple projects from a `projects.json` config file
+- See `vercel-project-manager/README.md` for installation and usage
 
 ## Getting Started
 1. Clone the repo: `git clone <repo> && cd common-scripts`
