@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import * as tty from "tty";
 import { spawn } from "child_process";
 import inquirer from "inquirer";
 
@@ -43,6 +44,8 @@ function getAliases(): Alias[] {
 
 // Prompt user to select an alias
 async function selectAndRunAlias(): Promise<void> {
+  const isPrintMode = process.argv.includes("--print");
+
   const excludeList = DEFAULT_EXCLUDE.split(",")
     .map((x) => x.trim())
     .filter(Boolean);
@@ -60,9 +63,20 @@ async function selectAndRunAlias(): Promise<void> {
     return;
   }
 
+  // In --print mode, render the interactive UI on /dev/tty so stdout stays
+  // clean for shell command substitution $(...) to capture just the command.
+  let ttyIn: tty.ReadStream | undefined;
+  let ttyOut: tty.WriteStream | undefined;
+  const promptFn = isPrintMode
+    ? inquirer.createPromptModule({
+        input: (ttyIn = new tty.ReadStream(fs.openSync("/dev/tty", "r"))),
+        output: (ttyOut = new tty.WriteStream(fs.openSync("/dev/tty", "w"))),
+      })
+    : inquirer.createPromptModule();
+
   let selectedAlias: string;
   try {
-    const result = await inquirer.prompt([
+    const result = await promptFn([
       {
         type: "list",
         name: "selectedAlias",
@@ -77,12 +91,21 @@ async function selectAndRunAlias(): Promise<void> {
   } catch (error) {
     // Handle user interruption (Ctrl+C)
     if (error instanceof Error && error.name === "ExitPromptError") {
-      console.log("\nCancelled!");
+      process.stderr.write("\nCancelled!\n");
       process.exit(0);
     }
     throw error;
   }
 
+  if (isPrintMode) {
+    ttyIn?.destroy();
+    ttyOut?.destroy();
+    // Print only the command to stdout; the shell eval's it in the current shell.
+    process.stdout.write(selectedAlias + "\n");
+    return;
+  }
+
+  // Legacy spawn mode (used when invoked without --print)
   console.log(`Running: ${selectedAlias}`);
 
   const ZSH = "/bin/zsh";

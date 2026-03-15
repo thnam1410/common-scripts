@@ -15,9 +15,11 @@ Small helper that lists every alias defined in your `~/.zshrc` and lets you pick
 3. Link it to your shell (example for zsh)
    ```bash
    # ~/.zshrc
-   alias aaa="node /absolute/path/to/alias-selector/dist/index.js"
+   alias aaa='eval "$(node /absolute/path/to/alias-selector/dist/index.js --print)"'
    ```
    Replace `/absolute/path/to` with this folder on your machine. Now typing `aaa` launches the selector.
+
+   The `--print` flag makes the script render its interactive UI on `/dev/tty` and print only the selected command to stdout. The shell `eval`s it directly, so `cd` aliases navigate the current shell instead of spawning a subshell.
 
 ## Development
 - `npm run build` - Compile TypeScript to JavaScript
@@ -26,8 +28,7 @@ Small helper that lists every alias defined in your `~/.zshrc` and lets you pick
 
 ## Usage
 - The CLI shows every alias except ones you exclude via `ALIAS_SELECTOR_EXCLUDE` (comma-separated list, default `tf,k,aaa`).
-- Selecting an alias executes it inside an interactive `zsh` subshell so environment and nested aliases still work.
-- `cd` aliases open a new shell in the target directory so you can keep working there.
+- Selecting an alias runs it via `eval` in the **current shell** — `cd` aliases navigate in-place without spawning a subshell, keeping Warp (or any terminal) native.
 
 ## Configuration
 | Env Var | Default | Description |
